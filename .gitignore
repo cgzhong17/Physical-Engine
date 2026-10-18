@@ -1,0 +1,59 @@
+# IDE state and machine-specific settings
+.vs/
+.qtcreator/
+.qtc_clangd/
+.cache/clangd/
+*.vcxproj.user
+*.sln.docstates
+*.VC.db
+*.VC.VC.opendb
+CMakeLists.txt.user*
+*.pro.user*
+CMakeUserPresets.json
+CMakeSettings.json
+
+# Build directories (including legacy/custom IDE locations)
+/build/
+/out/
+cmake-build-*/
+
+# Generated CMake, Ninja and AUTOMOC files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+DartConfiguration.tcl
+compile_commands.json
+build.ninja
+rules.ninja
+.ninja_deps
+.ninja_log
+*_autogen/
+/Testing/
+/Makefile
+
+# Compiler output
+*.o
+*.obj
+*.exe
+*.dll
+*.lib
+*.a
+*.so
+*.so.*
+*.dylib
+*.pdb
+*.ilk
+*.idb
+*.pch
+*.gch
+*.exp
+*.ipch
+*.res
+
+# Local logs and temporary files
+*.log
+*.tmp
+*.bak
+*.swp
+*~
