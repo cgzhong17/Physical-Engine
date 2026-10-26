@@ -1,0 +1,9 @@
+{
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+    "cmake.cmakePath": "/opt/homebrew/bin/cmake",
+    "cmake.configureSettings": {
+        "PHYSICAL_ENGINE_WITH_QT": false,
+        "PHYSICAL_ENGINE_BUILD_QT_DEMO": false
+    },
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json"
+}

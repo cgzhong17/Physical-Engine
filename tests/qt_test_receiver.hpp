@@ -1,6 +1,6 @@
 #pragma once
 
-#include "vector3.hpp"
+#include "qt_adapter.hpp"
 #include <QObject>
 
 // AUTOMOC generates this header's meta-object code as a separate source file.

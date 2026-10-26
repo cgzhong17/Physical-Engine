@@ -1,9 +1,4 @@
-#include "vector3.hpp"
-
-#include <QMatrix4x4>
-#include <QMouseEvent>
-#include <QPointF>
-#include <QVector3D>
+#include "qt_adapter.hpp"
 
 Vector3 generateVectorFromMouse(const QPointF& mousePos, const QPointF& origin, const QMatrix4x4& camera, double scale) {
 	// Convert mouse position to view coordinates

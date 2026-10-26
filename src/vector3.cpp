@@ -1,5 +1,4 @@
 #include "vector3.hpp"
-#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 using namespace std;
@@ -7,13 +6,6 @@ using namespace std;
 Vector3::Vector3() : x{ 0.0 }, y{ 0.0 }, z{ 0.0 } {}
 
 Vector3::Vector3(double x, double y, double z) : x{ x }, y{ y }, z{ z } {}
-
-Vector3::Vector3(const QVector3D& vector)
-    : Vector3(vector.x(), vector.y(), vector.z()) {}
-
-QVector3D Vector3::toQVector3D() const {
-    return QVector3D(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z));
-}
 
 double Vector3::getX() const {
     return x;
@@ -58,7 +50,11 @@ Vector3 Vector3::normalized() const {
     return magnitude == 0.0 ? Vector3() : *this / magnitude;
 }
 
-PhysicalObjects::PhysicalObjects(Vector3 position, shared_ptr<Color> color_ptr) : position{ position }, color{ color_ptr } {}
+PhysicalObjects::PhysicalObjects(Vector3 position, shared_ptr<Color> color_ptr, double mass)
+    : position{ position }, color{ color_ptr }, mass{ mass }, velocity{}, accumulatedForce{} {
+    if (!isfinite(mass) || mass <= 0.0)
+        throw invalid_argument("Mass must be finite and positive");
+}
 
 Vector3 PhysicalObjects::getPosition() const {
     return position;
@@ -80,21 +76,6 @@ Color::Color(double r, double g, double b) : r{ r }, g{ g }, b{ b } {
         throw out_of_range("Color channel must be in [0, 255]");
 }
 
-Color::Color(const QColor& color) : Color() {
-    if (!color.isValid())
-        throw invalid_argument("Cannot convert an invalid QColor");
-    const QColor rgb = color.toRgb();
-    r = clamp(static_cast<double>(rgb.redF()), 0.0, 1.0) * 255.0;
-    g = clamp(static_cast<double>(rgb.greenF()), 0.0, 1.0) * 255.0;
-    b = clamp(static_cast<double>(rgb.blueF()), 0.0, 1.0) * 255.0;
-}
-
-QColor Color::toQColor() const {
-    return QColor::fromRgbF(static_cast<float>(r / 255.0),
-                           static_cast<float>(g / 255.0),
-                           static_cast<float>(b / 255.0));
-}
-
 double Color::GetR() const {
     return r;
 }
@@ -107,12 +88,13 @@ double Color::GetB() const {
     return b;
 }
 
-Sphere::Sphere(Vector3 position, std::shared_ptr<Color> color, double radius) : PhysicalObjects{ position, color }, radius{ radius } {
+Sphere::Sphere(Vector3 position, std::shared_ptr<Color> color, double radius, double mass)
+    : PhysicalObjects{ position, color, mass }, radius{ radius } {
     if (radius <= 0.0)
         throw invalid_argument("Sphere radius must be positive");
 }
 
-double Sphere::shape() const {
+double Sphere::volumn() const {
     return (4.0 / 3.0) * PI * pow(radius, 3);
 }
 
@@ -124,9 +106,11 @@ Vector3 Sphere::getNormal(const Vector3& point) const {
     return (point - getPosition()).normalized();
 }
 
-Cube::Cube(Vector3 position, std::shared_ptr<Color> color, double length, double width, double height) : PhysicalObjects{ position, color }, length{ length }, width{ width }, height{ height } {}
+Cube::Cube(Vector3 position, std::shared_ptr<Color> color, double length, double width, double height,
+           double mass)
+    : PhysicalObjects{ position, color, mass }, length{ length }, width{ width }, height{ height } {}
 
-double Cube::shape() const {
+double Cube::volumn() const {
     return length * width * height;
 }
 
@@ -147,18 +131,36 @@ Vector3 Cube::getNormal(const Vector3& point) const {
     return Vector3(0.0, 0.0, 0.0);
 }
 
-void PhysicalObjects::addForce(const Vector3& force, double mass, double timeStep) {
-	double x = this->getPosition().getX() + (force.getX() / mass) * timeStep;
-	double y = this->getPosition().getY() + (force.getY() / mass) * timeStep;
-	double z = this->getPosition().getZ() + (force.getZ() / mass) * timeStep;
-	this->setPosition(Vector3(x, y, z));
+void PhysicalObjects::addForce(const Vector3& force) {
+    accumulatedForce = accumulatedForce + force;
 }
 
-void PhysicalObjects::addGravity(double mass, double timeStep) {
-
+void PhysicalObjects::addGravity() {
+    addForce(Vector3(0.0, -GRAVITY, 0.0) * mass);
 }
 
-void registerPhysicsMetaTypes() {
-    qRegisterMetaType<Vector3>("Vector3");
-    qRegisterMetaType<Color>("Color");
+void PhysicalObjects::updateForce(double deltaTime) {
+    if (!isfinite(deltaTime) || deltaTime < 0.0)
+        throw invalid_argument("Time step must be finite and nonnegative");
+    //if (deltaTime == 0.0)
+    //   return;
+
+    const Vector3 acceleration = accumulatedForce / mass;
+    velocity = velocity + acceleration * deltaTime;
+    position = position + velocity * deltaTime;
+    accumulatedForce = Vector3();
 }
+
+double PhysicalObjects::getMass() const {
+    return mass;
+}
+
+Vector3 PhysicalObjects::getVelocity() const {
+    return velocity;
+}
+
+void PhysicalObjects::setVelocity(const Vector3& velocity) {
+    this->velocity = velocity;
+}
+
+

@@ -1,4 +1,4 @@
-#include "vector3.hpp"
+#include "qt_adapter.hpp"
 
 #include <QApplication>
 #include <QFontDatabase>
@@ -58,9 +58,9 @@ private:
     }
 
     void drawSphere(QPainter& painter) const {
-        const QPointF center = project(sphere.getPosition().toQVector3D());
+        const QPointF center = project(PhysicsQt::toQVector3D(sphere.getPosition()));
         const double radius = sphere.getRadius() * scale;
-        const QColor color = sphere.getColor_ptr()->toQColor();
+        const QColor color = PhysicsQt::toQColor(*sphere.getColor_ptr());
         QRadialGradient gradient(center - QPointF(radius * 0.3, radius * 0.3), radius * 1.3);
         gradient.setColorAt(0.0, color.lighter(150));
         gradient.setColorAt(0.6, color);
@@ -74,7 +74,7 @@ private:
         const float halfX = static_cast<float>(cube.getLength() / 2.0);
         const float halfY = static_cast<float>(cube.getHeight() / 2.0);
         const float halfZ = static_cast<float>(cube.getWidth() / 2.0);
-        const QVector3D center = cube.getPosition().toQVector3D();
+        const QVector3D center = PhysicsQt::toQVector3D(cube.getPosition());
         const std::array<QVector3D, 8> vertices = {{
             center + QVector3D(-halfX, -halfY, -halfZ),
             center + QVector3D( halfX, -halfY, -halfZ),
@@ -97,7 +97,7 @@ private:
         std::sort(faces.begin(), faces.end(), [](const Face& a, const Face& b) {
             return a.depth < b.depth;
         });
-        const QColor color = cube.getColor_ptr()->toQColor();
+        const QColor color = PhysicsQt::toQColor(*cube.getColor_ptr());
         for (const auto& face : faces) {
             QPolygonF polygon;
             for (int index : face.indices)

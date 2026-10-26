@@ -1,90 +1,114 @@
-# C++ 物理层与 Qt 渲染层
+# 后端计算与可选 Qt 渲染
 
-当前采用 **Qt Widgets + QPainter**。`include/vector3.hpp` 与 `src/vector3.cpp` 保存物体数据并执行计算；
-`src/examples/qt_viewer.cpp` 读取这些数据，把三维坐标投影到窗口中。
-示例使用固定正交相机，展示静态球体和立方体，没有增加运动或碰撞模拟。
+`PhysicalEngine` 是纯标准 C++20 静态库，不依赖 Qt。Mac 可以只开发、编译和测试后端；
+Windows 构建同一套后端源码，并按需启用 `PhysicalEngineQt` 适配层和 Qt Widgets 示例。
+Mac 生成的静态库不能直接供 Windows 链接，Windows 需要使用自己的工具链重新编译。
 
-## 目录结构
+测试源码和测试专用头文件统一位于项目根目录的 `tests/`，生产代码位于 `src/` 和 `include/`。
 
-```text
-include/
-  vector3.hpp
-  tests/qt_test_receiver.hpp
-src/
-  vector3.cpp
-  generatevector.cpp
-  examples/qt_viewer.cpp
-  tests/vector3_qt_test.cpp
-build/
-  <configuration>/bin/  可执行文件
-  <configuration>/lib/  编译生成的库
-  legacy-out/           原 out 目录的历史构建文件
+## Mac / 无 Qt 的后端开发
+
+在项目根目录运行：
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DPHYSICAL_ENGINE_WITH_QT=OFF -DPHYSICAL_ENGINE_BUILD_QT_DEMO=OFF
+cmake --build build
+ctest --test-dir build --output-on-failure
 ```
 
-所有 `.cpp` 放在 `src/` 下，所有 `.hpp` 放在 `include/` 下。
-CMake 按目标显式列出源文件；新增源码时需将它加入对应目标。
-旧构建目录中的缓存保留在 `build/legacy-out/`，新配置使用新的构建目录。
+默认关闭 Qt。后端只需包含 `vector3.hpp`，链接 `PhysicalEngine`。
+构建产物位于 `build/lib/` 和 `build/bin/`。
 
-## 在 Qt Creator 中运行
+VS Code 安装 Microsoft C/C++ 和 CMake Tools，以 CMake Tools 为 configuration provider，
+执行 `CMake: Configure` 后获取 include 路径。Makefiles / Ninja 构建会导出
+`build/compile_commands.json`。无 Qt 环境下，Qt 适配层、Qt 示例和 Qt 测试文件仍需要
+Qt 开发库才能单独解析；它们不参与后端构建。
 
-1. 打开根目录的 `CMakeLists.txt`。
-2. 选择本机 **Qt 6.12.0 MinGW 64-bit** 套件。此套件不能与 Visual Studio 的 MSVC 编译器混用。
-3. 将构建目录设为项目下的 `build/<configuration>`，例如 `build/qt-mingw`，构建并运行 `PhysicalEngineQtDemo`。
+## Windows / Qt 构建
 
-本机 Visual Studio 的 `CMakeSettings.json` 也使用 `build/<configuration>`。
-该文件包含本机 Qt 路径，已作为本地配置加入 `.gitignore`。
+使用与 Qt 安装匹配的编译器：MinGW Qt 对应 MinGW，MSVC Qt 对应兼容的 MSVC 工具链。
+在 Qt Creator 中打开 `CMakeLists.txt`，选择 Qt 套件，并在 CMake 配置中设置
+`PHYSICAL_ENGINE_WITH_QT=ON`、`PHYSICAL_ENGINE_BUILD_QT_DEMO=ON`。
 
-也可以在项目根目录用 PowerShell 构建，以下路径对应当前机器的 Qt 安装：
+也可以在已配置好工具链的终端运行，替换成自己的 Qt 安装前缀：
 
 ```powershell
-$env:PATH = 'C:\Qt\Tools\mingw1310_64\bin;C:\Qt\6.12.0\mingw_64\bin;' + $env:PATH
-& 'C:\Qt\Tools\CMake_64\bin\cmake.exe' -S . -B build/qt-mingw -G Ninja '-DCMAKE_MAKE_PROGRAM=C:/Qt/Tools/Ninja/ninja.exe' '-DCMAKE_CXX_COMPILER=C:/Qt/Tools/mingw1310_64/bin/g++.exe' '-DCMAKE_PREFIX_PATH=C:/Qt/6.12.0/mingw_64' -DCMAKE_BUILD_TYPE=Debug
-& 'C:\Qt\Tools\CMake_64\bin\cmake.exe' --build build/qt-mingw
-& 'C:\Qt\Tools\CMake_64\bin\ctest.exe' --test-dir build/qt-mingw --output-on-failure
-& '.\build\qt-mingw\bin\PhysicalEngineQtDemo.exe'
+cmake -S . -B build/qt -DPHYSICAL_ENGINE_WITH_QT=ON -DPHYSICAL_ENGINE_BUILD_QT_DEMO=ON -DCMAKE_PREFIX_PATH=C:/Qt/<version>/<kit>
+cmake --build build/qt --config Debug
+ctest --test-dir build/qt -C Debug --output-on-failure
 ```
 
-## 在自己的窗口中读取物理对象
+当前 Mac 的 `.vscode/settings.json` 显式关闭 Qt；Windows 使用 VS Code 时需将其中的
+这两个选项改为 `true`，并配置当地 Qt 路径。
+
+Qt 适配层链接 Qt Core、Gui，示例额外链接 Widgets。自己的 Qt 程序链接：
+
+```cmake
+target_link_libraries(MyQtApp PRIVATE PhysicalEngineQt Qt${QT_VERSION_MAJOR}::Widgets)
+```
+
+## Qt 类型转换
+
+原先放在后端类中的 Qt 构造函数、`toQVector3D()`、`toQColor()` 已移入
+`qt_adapter.hpp`，使用 `PhysicsQt` 的独立函数。Qt 调用端需同步调整：
 
 ```cpp
-#include "vector3.hpp"
+#include "qt_adapter.hpp"
 
 Sphere ball(Vector3(0.0, 1.0, 0.0),
             std::make_shared<Color>(72.0, 161.0, 255.0), 0.9);
 
-// 物理计算继续使用 Vector3 和 double。
-ball.setPosition(ball.getPosition() + Vector3(0.1, 0.0, 0.0));
-
-// 绘制时才转换成 Qt 类型。
-QVector3D renderPosition = ball.getPosition().toQVector3D();
-QColor renderColor = ball.getColor_ptr()->toQColor();
-double radius = ball.getRadius();
-
-// Qt 数据也可显式转回物理层类型。
-Vector3 worldPosition(QVector3D(1.0f, 2.0f, 3.0f));
-Color material(QColor(255, 128, 64));
+QVector3D renderPosition = PhysicsQt::toQVector3D(ball.getPosition());
+QColor renderColor = PhysicsQt::toQColor(*ball.getColor_ptr());
+Vector3 worldPosition = PhysicsQt::fromQVector3D(QVector3D(1.0f, 2.0f, 3.0f));
+Color material = PhysicsQt::fromQColor(QColor(255, 128, 64));
 ```
 
-立方体提供 `getLength()`、`getWidth()`、`getHeight()`。
-预览约定 x 为长、y 为高、z 为宽，物体位置为中心点。
-自己的物理计算更新位置后，在 GUI 线程调用窗口的 `update()` 请求重绘。
-`QVector3D` 使用 float，转换只用于绘制，物理坐标仍保留 double 精度。
-`Color` 保留原有 0–255 RGB 通道，不保存透明度；无效 QColor 会抛出异常。
+后端坐标保留 double 精度；Qt 的 QVector3D 转换使用 float。
+Color 保存 0–255 的 RGB 通道，不保存 alpha；无效 QColor 转换抛出异常。
+鼠标到世界坐标的 `generateVectorFromMouse()` 也声明在 `qt_adapter.hpp`，只在 Qt 层编译。
 
-## Qt 信号和槽
+## Qt 信号与槽
 
-`Vector3`、`Color` 可存入 `QVariant`。若需要队列连接，在建立连接前调用一次：
+Qt 调用端包含 `qt_adapter.hpp` 后，Vector3、Color 可存入 QVariant。
+使用队列连接之前调用一次：
 
 ```cpp
 registerPhysicsMetaTypes();
 ```
 
-使用自己的 `QObject` 控制器发送数据；数值类继续保持可复制。
-跨线程时应传递数据副本，并让窗口在 GUI 线程更新，避免同时读写同一个物体。
+通过自己的 QObject 控制器传递数据；数值类继续保持可复制。跨线程传递副本，
+在 GUI 线程更新窗口，避免并发读写同一个物体。
 
-## 构建选项与当前范围
+## 力、重力和时间步
 
-- `PHYSICAL_ENGINE_BUILD_QT_DEMO=OFF` 可关闭示例窗口，只构建物理库及其测试。
-- `BUILD_TESTING=OFF` 可关闭测试。库公开链接 Qt Core 和 Gui，示例另需 Widgets。
-- `Cube::getNormal()` 仍是原有占位实现，不可用于立方体碰撞法线计算。
-- 示例使用 QPainter 绘制投影图形，不是通用三维深度渲染器。
+物体质量由构造函数最后一个参数指定，单位 kg，默认 1，必须为有限正数。
+初始速度默认为零，可通过 `setVelocity()` 设置，并用 `getVelocity()` 读取。
+坐标以 m 为单位，+Y 向上；力以 N 为单位，速度以 m/s 为单位。
+
+`addForce(force)` 累计外力，`addGravity()` 累计向下的重力 `mass * GRAVITY`，
+这两个函数不接收时间步，也不立即改变位置或速度。
+每一步添加完所有力后，调用一次 `updateForce(dt)`，dt 以秒为单位：
+
+```cpp
+Sphere ball(Vector3(0, 10, 0), std::make_shared<Color>(72, 161, 255), 0.9, 2.0);
+const double dt = 1.0 / 60.0;
+for (int step = 0; step < 60; ++step) {
+    ball.addForce(Vector3(1, 0, 0));
+    ball.addGravity();
+    ball.updateForce(dt);
+}
+```
+
+上面的循环模拟一秒，但不会等待现实中的一秒。
+`updateForce()` 使用半隐式欧拉法，先更新速度，再更新位置，最后清空本步合力。
+速度会保留到下一步；持续力（包括重力）必须每一步重新添加。
+负数或非有限 dt 会抛出异常，dt 为零时保持状态和待处理的力。
+
+## 当前运算范围
+
+- `vector3_test` 不依赖 Qt，检查向量、颜色、几何、合力、惯性和固定步长重力积分。
+- `vector3_qt_test` 和 `qt_viewer_smoke` 仅在对应 Qt 选项启用时构建。
+- `BUILD_TESTING=OFF` 可关闭所有测试。
+- `Cube::getNormal()` 仍返回零向量，不可用于立方体碰撞法线计算。
+- Qt 示例只绘制静态场景，尚未加入运动或碰撞模拟。

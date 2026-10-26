@@ -1,5 +1,5 @@
-#include "vector3.hpp"
-#include "tests/qt_test_receiver.hpp"
+#include "qt_adapter.hpp"
+#include "qt_test_receiver.hpp"
 
 #include <QCoreApplication>
 #include <QMetaObject>
@@ -31,10 +31,10 @@ int main(int argc, char** argv) {
     try {
         registerPhysicsMetaTypes();
         const QVector3D qtVector(1.25f, -2.5f, 3.75f);
-        const Vector3 vector(qtVector);
+        const Vector3 vector = PhysicsQt::fromQVector3D(qtVector);
         require(vector.getX() == 1.25 && vector.getY() == -2.5 && vector.getZ() == 3.75,
                 "QVector3D import failed");
-        require(vector.toQVector3D() == qtVector, "QVector3D round trip failed");
+        require(PhysicsQt::toQVector3D(vector) == qtVector, "QVector3D round trip failed");
         const Vector3 precise(1.0000000001, 0.0, 0.0);
         require(precise.getX() == 1.0000000001, "Physics lost double precision");
         require(Vector3().normalized().length() == 0.0, "Zero normalization failed");
@@ -42,13 +42,13 @@ int main(int argc, char** argv) {
                                          "Division by zero must fail");
 
         const QColor qtColor(25, 128, 250);
-        const Color color(qtColor);
-        require(color.toQColor().rgb() == qtColor.rgb(), "QColor round trip failed");
-        require(std::abs(Color(12.5, 100.25, 254.5).toQColor().redF() * 255.0 - 12.5) < 0.01,
+        const Color color = PhysicsQt::fromQColor(qtColor);
+        require(PhysicsQt::toQColor(color).rgb() == qtColor.rgb(), "QColor round trip failed");
+        require(std::abs(PhysicsQt::toQColor(Color(12.5, 100.25, 254.5)).redF() * 255.0 - 12.5) < 0.01,
                 "Fractional RGB channel was truncated");
-        require(Color(QColor(1, 2, 3, 4)).toQColor().alpha() == 255,
+        require(PhysicsQt::toQColor(PhysicsQt::fromQColor(QColor(1, 2, 3, 4))).alpha() == 255,
                 "RGB-only alpha policy failed");
-        requireThrows<std::invalid_argument>([] { (void)Color(QColor()); },
+        requireThrows<std::invalid_argument>([] { (void)PhysicsQt::fromQColor(QColor()); },
                                              "Invalid QColor must fail");
         requireThrows<std::out_of_range>([] {
             (void)Color(std::numeric_limits<double>::quiet_NaN(), 0.0, 0.0);
@@ -58,7 +58,7 @@ int main(int argc, char** argv) {
 
         require(QVariant::fromValue(vector).value<Vector3>().getZ() == vector.getZ(),
                 "Vector3 QVariant storage failed");
-        require(QVariant::fromValue(color).value<Color>().toQColor() == color.toQColor(),
+        require(PhysicsQt::toQColor(QVariant::fromValue(color).value<Color>()) == PhysicsQt::toQColor(color),
                 "Color QVariant storage failed");
         Receiver receiver;
         require(QMetaObject::invokeMethod(&receiver, "receiveVector", Qt::QueuedConnection,
@@ -69,13 +69,13 @@ int main(int argc, char** argv) {
         QCoreApplication::processEvents();
         require(receiver.vectorReceived && receiver.vector.getX() == vector.getX(),
                 "Queued Vector3 delivery failed");
-        require(receiver.colorReceived && receiver.color.toQColor() == color.toQColor(),
+        require(receiver.colorReceived && PhysicsQt::toQColor(receiver.color) == PhysicsQt::toQColor(color),
                 "Queued Color delivery failed");
 
         auto material = std::make_shared<Color>(255.0, 100.0, 0.0);
         Sphere sphere(Vector3(), material, 1.0);
         Cube cube(Vector3(1, 2, 3), material, 2.0, 3.0, 4.0);
-        cube.setPosition(Vector3(QVector3D(4, 5, 6)));
+        cube.setPosition(PhysicsQt::fromQVector3D(QVector3D(4, 5, 6)));
         require(cube.getPosition().getX() == 4 && cube.getLength() == 2.0 &&
                 cube.getWidth() == 3.0 && cube.getHeight() == 4.0 && sphere.getRadius() == 1.0,
                 "Renderer geometry access failed");
